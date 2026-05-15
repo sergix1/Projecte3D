@@ -7,7 +7,7 @@ public class EnemyBase : MonoBehaviour
     private GameObject player;
     private NavMeshAgent navMesh;
     private int currentlife;
-    private int maxLife;
+    public int maxLife=100;
     public TextMeshPro textMeshPro;
     public GameObject SelectedObj;
     public bool selected;
@@ -24,7 +24,6 @@ public class EnemyBase : MonoBehaviour
     void Start()
     {
         selected = false;
-        maxLife = 100;
         currentlife = maxLife;
         player = GameObject.FindGameObjectWithTag("Player");
         navMesh = GetComponent<NavMeshAgent>();

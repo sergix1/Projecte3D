@@ -5,138 +5,219 @@ public class ClickToMove : MonoBehaviour
 {
     public Transform SpawnBulletPos;
 
-    private NavMeshAgent agent;
-    private Animator animator;
-    private Camera cam;
+    NavMeshAgent agent;
+    Animator animator;
+    Camera cam;
 
     public GameObject clickPointPrefab;
     public GameObject clickPoint2Prefab;
     public GameObject RangePrefab;
+    public GameObject selectorPrefab;
 
     public GameObject projectile;
-    public Transform projectileTransform;
 
+    public Transform projectileTransform;
     public Transform enemyes;
 
     public float range = 120;
     public int autosec = 2;
+    public float RotationOffset = 90f;
+    public float shootCooldown = 0.5f;
 
-    Vector3 oldPosition;
+    bool canShoot = true;
+    bool isShootingAnimation = false;
+
     float currentTimeToAA;
+
+    Vector3 savedDirection;
+    bool projectileShot = false;
 
     void Start()
     {
-        animator = GetComponent<Animator>();
+       
+        animator = GetComponentInChildren<Animator>();
         agent = GetComponent<NavMeshAgent>();
-        cam = Camera.main;
-
-        // IMPORTANTE
         agent.updateRotation = false;
+        cam = Camera.main;
     }
 
     void Update()
     {
         currentTimeToAA += UnityEngine.Time.deltaTime;
 
-        HandleRightClick();
-        HandleLeftClick();
-        HandleRotation();
-        HandleAnimation();
-    }
-
-    void HandleRightClick()
-    {
-        if (!Input.GetMouseButtonDown(1))
-            return;
-
-        Ray ray = cam.ScreenPointToRay(Input.mousePosition);
-
-        if (Physics.Raycast(ray, out RaycastHit hit))
+        // CLICK DERECHO
+        if (Input.GetMouseButtonDown(1))
         {
-            // CLICK EN ENEMIGO
-            if (hit.collider.CompareTag("Enemy"))
+            Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+
+            if (Physics.Raycast(ray, out RaycastHit hit))
             {
-                foreach (Transform enemy in enemyes)
+                // DISPARAR A ENEMIGO
+                if (hit.collider.gameObject.CompareTag("Enemy"))
                 {
-                    enemy.GetComponent<EnemyBase>().selected = false;
-                }
+                    if (!canShoot)
+                        return;
 
-                hit.collider.GetComponent<EnemyBase>().selected = true;
+                    Vector3 direction =
+                        (hit.point - transform.position).normalized;
 
-                Vector3 direction =
-                    (hit.collider.transform.position - transform.position).normalized;
+                    // ROTACIÓN HACIA ENEMIGO
+                    Vector3 lookDirection =
+                        hit.point - transform.position;
 
-                InstantiateProjectile(direction);
-            }
-            else
-            {
-                // MOVER
-                agent.SetDestination(hit.point);
+                    lookDirection.y = 0;
 
-                Vector3 pos = hit.point;
-                pos.y += 0.03f;
+                    transform.rotation =
+         Quaternion.LookRotation(lookDirection.normalized)
+         * Quaternion.Euler(0, RotationOffset, 0);
+                    canShoot = false;
 
-                Instantiate(
-                    clickPointPrefab,
-                    pos,
-                    Quaternion.Euler(90f, 0f, 0f)
-                );
-            }
-        }
-    }
+                    isShootingAnimation = true;
+                    agent.isStopped = true;
+                    animator.SetTrigger("shoot");
+                    
+                    instantiateProjectile(direction);
 
-    void HandleLeftClick()
-    {
-        if (!Input.GetMouseButtonDown(0))
-            return;
+                    Invoke(nameof(ResetShoot), shootCooldown);
 
-        Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+                    Invoke(
+                        nameof(ResetShootAnimation),
+                        shootCooldown
+                    );
 
-        if (Physics.Raycast(ray, out RaycastHit hit))
-        {
-            if (currentTimeToAA > 0.5f)
-            {
-                Transform closestEnemy = null;
-                float oldDistance = Mathf.Infinity;
-
-                // ENEMIGO MÁS CERCANO AL CLICK
-                foreach (Transform enemy in enemyes)
-                {
-                    float distance =
-                        Vector3.Distance(enemy.position, hit.point);
-
-                    if (distance < oldDistance)
-                    {
-                        closestEnemy = enemy;
-                        oldDistance = distance;
-                    }
-                }
-
-                if (closestEnemy != null)
-                {
                     foreach (Transform enemy in enemyes)
                     {
                         enemy.GetComponent<EnemyBase>().selected = false;
                     }
 
-                    closestEnemy.GetComponent<EnemyBase>().selected = true;
+                    hit.collider.gameObject
+                        .GetComponent<EnemyBase>()
+                        .selected = true;
+                }
+                // MOVERSE
+                else
+                {
+                    if (isShootingAnimation)
+                        return;
 
-                    Vector3 direction =
-                        (closestEnemy.position - transform.position).normalized;
+                    agent.SetDestination(hit.point);
 
-                    InstantiateProjectile(direction);
+                    Vector3 pos = hit.point;
+                    pos.y += 0.03f;
 
-                    currentTimeToAA = 0;
+                    Instantiate(
+                        clickPointPrefab,
+                        pos,
+                        Quaternion.Euler(90f, 0f, 0f)
+                    );
                 }
             }
-
-            Instantiate(
-                clickPoint2Prefab,
-                hit.point + Vector3.up * 0.03f,
-                Quaternion.Euler(90f, 0f, 0f)
-            );
+           
         }
 
+        // CLICK IZQUIERDO
+        if (Input.GetMouseButtonDown(0))
+        {
+            Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+
+            if (Physics.Raycast(ray, out RaycastHit hit))
+            {
+                if (currentTimeToAA > 0.5f)
+                {
+                    Transform closestEnemy = null;
+
+                    float oldDistance = Mathf.Infinity;
+
+                    foreach (Transform enemy in enemyes)
+                    {
+                        float distance =
+                            Vector3.Distance(enemy.position, hit.point);
+
+                        if (distance < oldDistance)
+                        {
+                            closestEnemy = enemy;
+                            oldDistance = distance;
+                        }
+                    }
+
+                    if (closestEnemy != null)
+                    {
+                        if (!canShoot)
+                            return;
+
+                        foreach (Transform enemy in enemyes)
+                        {
+                            enemy.GetComponent<EnemyBase>().selected = false;
+                        }
+
+                        closestEnemy
+                            .GetComponent<EnemyBase>()
+                            .selected = true;
+
+                        Vector3 direction =
+                            (
+                                closestEnemy.position
+                                - transform.position
+                            ).normalized;
+
+                        // ROTACIÓN HACIA ENEMIGO
+                        Vector3 lookDirection =
+                            closestEnemy.position
+                            - transform.position;
+
+                        lookDirection.y = 0;
+
+                        Quaternion targetRotation =
+     Quaternion.LookRotation(
+         lookDirection.normalized
+     )
+     * Quaternion.Euler(0, RotationOffset, 0);
+
+                        transform.rotation = targetRotation;
+
+                      
+
+                        canShoot = false;
+                        agent.isStopped = true;
+                        isShootingAnimation = true;
+
+                        animator.SetTrigger("shoot");
+                        
+                        instantiateProjectile(direction);
+
+                        Invoke(nameof(ResetShoot), shootCooldown);
+
+                        Invoke(
+                            nameof(ResetShootAnimation),
+                            shootCooldown
+                        );
+
+                        currentTimeToAA = 0;
+                    }
+                }
+
+                Instantiate(
+                    clickPoint2Prefab,
+                    hit.point + Vector3.up * 0.03f,
+                    Quaternion.Euler(90f, 0f, 0f)
+                );
+            }
+        }
+        if (!isShootingAnimation && agent.velocity.magnitude > 0.1f)
+        {
+            Vector3 moveDirection = agent.velocity.normalized;
+            moveDirection.y = 0;
+
+            Quaternion lookRotation =
+                Quaternion.LookRotation(moveDirection);
+
+            transform.rotation = Quaternion.Slerp(
+                transform.rotation,
+                lookRotation,
+                UnityEngine.Time.deltaTime * 10f
+            );
+        }
+        // DEBUG RANGE
         if (Input.GetKeyDown(KeyCode.C))
         {
             Instantiate(
@@ -145,51 +226,54 @@ public class ClickToMove : MonoBehaviour
                 Quaternion.Euler(90f, 0f, 0f)
             );
         }
-    }
 
-    void HandleRotation()
-    {
-        // ROTACIÓN SUAVE SEGÚN MOVIMIENTO
-        if (agent.velocity.magnitude > 0.1f)
+        // ANIMACIÓN MOVIMIENTO
+        if (isShootingAnimation)
         {
-            Quaternion lookRot =
-                Quaternion.LookRotation(agent.velocity.normalized);
-
-            transform.rotation = Quaternion.Slerp(
-                transform.rotation,
-                lookRot,
-                10f * UnityEngine.Time.deltaTime
-            );
-        }
-    }
-
-    void HandleAnimation()
-    {
-        if (Vector3.Distance(oldPosition, transform.position) > 0.001f)
-            animator.SetFloat("speed", 1);
-        else
             animator.SetFloat("speed", 0);
-
-        oldPosition = transform.position;
-    }
-
-    private void InstantiateProjectile(Vector3 direction)
-    {
-        var projectileObj = Instantiate(
-            projectile,
-            SpawnBulletPos.position,
-            Quaternion.identity,
-            projectileTransform
-        );
-
-        Projectile p = projectileObj.GetComponent<Projectile>();
-
-        if (p == null)
+        }
+        else
         {
-            Debug.Log("El componente Projectile no funciona");
-            return;
+            float speed = agent.velocity.magnitude;
+
+            animator.SetFloat("speed", speed);
         }
 
-        p.SetDirection(direction.normalized);
+    }
+
+    void ResetShoot()
+    {
+        canShoot = true;
+    }
+
+    void ResetShootAnimation()
+    {
+        agent.isStopped = false;
+        isShootingAnimation = false;
+    }
+
+    private void instantiateProjectile(Vector3 direction)
+    {
+        Quaternion projectileRotation =
+    Quaternion.LookRotation(direction);
+
+        var projectileObj =
+            Instantiate(
+                projectile,
+                SpawnBulletPos.position,
+                projectileRotation,
+                projectileTransform
+            );
+
+        if (projectileObj.GetComponent<Projectile>() == null)
+        {
+            Debug.Log("El componente projectile no funciona");
+        }
+        else
+        {
+            projectileObj
+                .GetComponent<Projectile>()
+                .SetDirection(direction.normalized);
+        }
     }
 }

@@ -9,7 +9,7 @@ public class Spawner : MonoBehaviour
     {
         
     }
-    float timeToSpawn = 3f;
+    public float timeToSpawn = 6f;
     float currentTime;
     // Update is called once per frame
     void Update()

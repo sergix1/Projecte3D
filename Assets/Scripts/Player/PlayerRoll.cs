@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -34,41 +34,29 @@ public class PlayerRoll : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Space) && canRoll)
         {
             Vector3 direction = GetDirectionToMouse();
-
             if (direction != Vector3.zero)
-            {
                 StartCoroutine(Roll(direction));
-            }
         }
     }
 
     private Vector3 GetDirectionToMouse()
     {
+        if (mainCamera == null)
+            return Vector3.zero;
+
         Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
+        if (!Physics.Raycast(ray, out RaycastHit hit))
+            return Vector3.zero;
 
-        if (Physics.Raycast(ray, out RaycastHit hit))
-        {
-            Vector3 direction = hit.point - transform.position;
-            direction.y = 0;
-
-            return direction.normalized;
-        }
-
-        return Vector3.zero;
+        Vector3 direction = hit.point - transform.position;
+        direction.y = 0f;
+        return direction.normalized;
     }
 
     private IEnumerator Roll(Vector3 direction)
     {
         canRoll = false;
         clickToMove?.StopManualMovement();
-
-        bool canUseAgent = CanUseAgent();
-        if (canUseAgent)
-        {
-            agent.isStopped = true;
-            agent.ResetPath();
-        }
-
         transform.rotation = Quaternion.LookRotation(direction);
 
         if (animator != null)
@@ -76,38 +64,22 @@ public class PlayerRoll : MonoBehaviour
 
         float timer = 0f;
         float speed = rollDistance / rollDuration;
+        bool useAgent = agent != null && agent.enabled && agent.isOnNavMesh;
 
         while (timer < rollDuration)
         {
-            Vector3 displacement = direction * speed * Time.deltaTime;
-            if (clickToMove != null)
-                displacement = clickToMove.ClampManualDisplacement(displacement);
+            Vector3 movement = direction * speed * Time.deltaTime;
 
-            if (displacement.sqrMagnitude <= 0.0001f)
-                break;
+            if (useAgent)
+                agent.Move(movement);
+            else
+                transform.position += movement;
 
-            transform.position += displacement;
             timer += Time.deltaTime;
             yield return null;
         }
 
-        if (canUseAgent)
-        {
-            agent.Warp(transform.position);
-            if (agent.isOnNavMesh)
-                agent.isStopped = false;
-        }
-
-        if (animator != null)
-            animator.speed = 1f;
-
         yield return new WaitForSeconds(rollCooldown);
-
         canRoll = true;
-    }
-
-    private bool CanUseAgent()
-    {
-        return agent != null && agent.enabled && agent.isOnNavMesh;
     }
 }

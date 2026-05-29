@@ -76,7 +76,7 @@ public class Projectile : MonoBehaviour
         HandleImpact(other, GetImpactPoint(other));
     }
 
-    private void OnCollisionEnter(Collision collision)
+  /*  private void OnCollisionEnter(Collision collision)
     {
         if (!CanImpact(collision.collider))
             return;
@@ -86,7 +86,7 @@ public class Projectile : MonoBehaviour
             : GetImpactPoint(collision.collider);
 
         HandleImpact(collision.collider, impactPoint);
-    }
+    }*/
 
     private bool CanImpact(Collider other)
     {
@@ -128,7 +128,7 @@ public class Projectile : MonoBehaviour
         bool hitEnemy = enemy != null;
 
         if (hitEnemy)
-            enemy.restLife((int)damage);
+            enemy.RestLife((int)damage);
 
         SpawnImpactEffect(impactPoint, hitEnemy);
         Destroy(gameObject);

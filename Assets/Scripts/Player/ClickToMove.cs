@@ -18,6 +18,7 @@ public class ClickToMove : MonoBehaviour
     public float RotationOffset = 90f;
     public float shootCooldown = 0.5f;
     public float attackWindup = 0.2f;
+    public float volleySpreadAngle = 12f;
     public LayerMask groundLayer;
     public float manualAnimationSpeed = 1f;
     public float manualWalkPlaybackSpeed = 1.1f;
@@ -54,6 +55,9 @@ public class ClickToMove : MonoBehaviour
 
         if (Input.GetMouseButtonDown(0))
             TryAttackMousePosition();
+
+        if (Input.GetKeyDown(KeyCode.W))
+            TryVolleyMousePosition();
 
         UpdateRangeMarker();
         UpdateMoveAnimation();
@@ -233,6 +237,39 @@ public class ClickToMove : MonoBehaviour
         Invoke(nameof(ResetShoot), shootCooldown);
 
         return true;
+    }
+
+    private void TryVolleyMousePosition()
+    {
+        if (!canShoot || isShootingAnimation || SpawnBulletPos == null)
+            return;
+
+        if (!TryGetGroundHit(out RaycastHit hit))
+            return;
+
+        Vector3 direction = hit.point - SpawnBulletPos.position;
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude <= 0.001f)
+            return;
+
+        direction.Normalize();
+
+        StopMovement();
+        transform.rotation = Quaternion.LookRotation(direction) * Quaternion.Euler(0, RotationOffset, 0);
+
+        canShoot = false;
+        isShootingAnimation = true;
+
+        if (animator != null)
+            animator.SetTrigger("shoot");
+
+        InstantiateProjectile(Quaternion.Euler(0f, -volleySpreadAngle, 0f) * direction);
+        InstantiateProjectile(direction);
+        InstantiateProjectile(Quaternion.Euler(0f, volleySpreadAngle, 0f) * direction);
+
+        Invoke(nameof(ResetShootAnimation), shootCooldown);
+        Invoke(nameof(ResetShoot), shootCooldown);
     }
 
     private void ResetShoot()

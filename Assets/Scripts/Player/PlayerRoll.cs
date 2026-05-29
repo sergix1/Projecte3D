@@ -71,9 +71,17 @@ public class PlayerRoll : MonoBehaviour
             Vector3 movement = direction * speed * Time.deltaTime;
 
             if (useAgent)
+            {
+                Vector3 nextPosition = transform.position + movement;
+                if (NavMesh.Raycast(transform.position, nextPosition, out _, agent.areaMask))
+                    break;
+
                 agent.Move(movement);
+            }
             else
+            {
                 transform.position += movement;
+            }
 
             timer += Time.deltaTime;
             yield return null;

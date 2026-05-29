@@ -73,7 +73,13 @@ public class ClickToMove : MonoBehaviour
         if (IsRepeatedClick(hit.point))
             return;
 
-        if (!NavMesh.SamplePosition(hit.point, out NavMeshHit navHit, 2f, NavMesh.AllAreas))
+        int areaMask = agent.areaMask;
+
+        if (!NavMesh.SamplePosition(hit.point, out NavMeshHit navHit, 2f, areaMask))
+            return;
+
+        NavMeshPath path = new NavMeshPath();
+        if (!agent.CalculatePath(navHit.position, path) || path.status != NavMeshPathStatus.PathComplete)
             return;
 
         if (IsSameDestination(navHit.position))

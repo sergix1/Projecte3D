@@ -6,11 +6,14 @@ public class PlayerRoll : MonoBehaviour
 {
     [SerializeField] private float rollDistance = 2.8f;
     [SerializeField] private float rollDuration = 0.2f;
-    [SerializeField] private float rollCooldown = 1f;
+    [SerializeField] private float rollCooldown = 3f;
 
     [SerializeField] private NavMeshAgent agent;
     [SerializeField] private Animator animator;
     [SerializeField] private ClickToMove clickToMove;
+
+    [Header("UI")]
+    [SerializeField] private AbilityCooldownUI rollCooldownUI;
 
     private Camera mainCamera;
     private bool canRoll = true;
@@ -33,7 +36,11 @@ public class PlayerRoll : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.Space) && canRoll)
         {
+            if (rollCooldownUI != null && !rollCooldownUI.CanUse())
+                return;
+
             Vector3 direction = GetDirectionToMouse();
+
             if (direction != Vector3.zero)
                 StartCoroutine(Roll(direction));
         }
@@ -45,18 +52,25 @@ public class PlayerRoll : MonoBehaviour
             return Vector3.zero;
 
         Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
+
         if (!Physics.Raycast(ray, out RaycastHit hit))
             return Vector3.zero;
 
         Vector3 direction = hit.point - transform.position;
         direction.y = 0f;
+
         return direction.normalized;
     }
 
     private IEnumerator Roll(Vector3 direction)
     {
         canRoll = false;
+
+        if (rollCooldownUI != null)
+            rollCooldownUI.StartCooldown(rollCooldown);
+
         clickToMove?.StopManualMovement();
+
         transform.rotation = Quaternion.LookRotation(direction);
 
         if (animator != null)
@@ -73,6 +87,7 @@ public class PlayerRoll : MonoBehaviour
             if (useAgent)
             {
                 Vector3 nextPosition = transform.position + movement;
+
                 if (NavMesh.Raycast(transform.position, nextPosition, out _, agent.areaMask))
                     break;
 

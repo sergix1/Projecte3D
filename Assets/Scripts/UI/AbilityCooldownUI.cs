@@ -13,7 +13,9 @@ public class AbilityCooldownUI : MonoBehaviour
     void Start()
     {
         overlay.fillAmount = 0;
-        cooldownText.text = "";
+
+        if (cooldownText != null)
+            cooldownText.text = "";
     }
 
     void Update()
@@ -22,22 +24,37 @@ public class AbilityCooldownUI : MonoBehaviour
         {
             timer -= Time.deltaTime;
 
+            if (timer < 0)
+                timer = 0;
+
             overlay.fillAmount = timer / cooldown;
-            cooldownText.text = Mathf.CeilToInt(timer).ToString();
+
+            if (cooldownText != null)
+                cooldownText.text = Mathf.CeilToInt(timer).ToString();
         }
         else
         {
             overlay.fillAmount = 0;
-            cooldownText.text = "";
+
+            if (cooldownText != null)
+                cooldownText.text = "";
         }
     }
 
-    public void StartCooldown(float time)
+    public bool StartCooldown(float time)
     {
+        if (timer > 0)
+            return false;
+
         cooldown = time;
         timer = time;
+
         overlay.fillAmount = 1;
-        cooldownText.text = time.ToString();
+
+        if (cooldownText != null)
+            cooldownText.text = Mathf.CeilToInt(time).ToString();
+
+        return true;
     }
 
     public bool CanUse()

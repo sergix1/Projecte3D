@@ -158,6 +158,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4ff494f4a46b7914c971d5cc4cbca33e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  tripleAttackCooldownUI: {fileID: 0}
+  tripleAttackCooldown: 5
   SpawnBulletPos: {fileID: 0}
   clickPointPrefab: {fileID: 4949327666518959606, guid: efff6515addadb5448f4566eef2a4dd6, type: 3}
   clickPoint2Prefab: {fileID: 4949327666518959606, guid: acb043cdf81d2be4c86ec2e9b1d6d3f8, type: 3}
@@ -170,6 +172,7 @@ MonoBehaviour:
   RotationOffset: 90
   shootCooldown: 0.5
   attackWindup: 0.2
+  volleySpreadAngle: 12
   groundLayer:
     serializedVersion: 2
     m_Bits: 0
@@ -211,10 +214,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   rollDistance: 2.8
   rollDuration: 0.2
-  rollCooldown: 1
+  rollCooldown: 3
   agent: {fileID: 4719934882760903623}
   animator: {fileID: 3585146246417759770}
   clickToMove: {fileID: 0}
+  rollCooldownUI: {fileID: 0}
 --- !u!1001 &926830205596329073
 PrefabInstance:
   m_ObjectHideFlags: 0

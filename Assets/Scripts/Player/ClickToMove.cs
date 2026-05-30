@@ -3,6 +3,12 @@ using UnityEngine.AI;
 
 public class ClickToMove : MonoBehaviour
 {
+    [Header("UI")]
+    public AbilityCooldownUI tripleAttackCooldownUI;
+
+    public float tripleAttackCooldown = 5f;
+
+
     public Transform SpawnBulletPos;
 
     public GameObject clickPointPrefab;
@@ -38,6 +44,7 @@ public class ClickToMove : MonoBehaviour
     private Vector3 lastMoveDestination;
     private Vector3 lastMoveClickPoint;
     private GameObject rangeMarker;
+    private bool canTripleAttack = true;
 
     void Start()
     {
@@ -241,9 +248,10 @@ public class ClickToMove : MonoBehaviour
 
     private void TryVolleyMousePosition()
     {
-        if (!canShoot || isShootingAnimation || SpawnBulletPos == null)
+        if (!canShoot || !canTripleAttack || isShootingAnimation || SpawnBulletPos == null)
             return;
-
+        if (tripleAttackCooldownUI != null && !tripleAttackCooldownUI.CanUse())
+            return;
         if (!TryGetGroundHit(out RaycastHit hit))
             return;
 
@@ -256,10 +264,15 @@ public class ClickToMove : MonoBehaviour
         direction.Normalize();
 
         StopMovement();
+
         transform.rotation = Quaternion.LookRotation(direction) * Quaternion.Euler(0, RotationOffset, 0);
 
         canShoot = false;
+        canTripleAttack = false;
         isShootingAnimation = true;
+
+        if (tripleAttackCooldownUI != null)
+            tripleAttackCooldownUI.StartCooldown(tripleAttackCooldown);
 
         if (animator != null)
             animator.SetTrigger("shoot");
@@ -270,6 +283,12 @@ public class ClickToMove : MonoBehaviour
 
         Invoke(nameof(ResetShootAnimation), shootCooldown);
         Invoke(nameof(ResetShoot), shootCooldown);
+        Invoke(nameof(ResetTripleAttack), tripleAttackCooldown);
+    }
+
+    private void ResetTripleAttack()
+    {
+        canTripleAttack = true;
     }
 
     private void ResetShoot()

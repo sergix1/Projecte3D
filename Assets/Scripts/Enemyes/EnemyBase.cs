@@ -31,6 +31,12 @@ public class EnemyBase : MonoBehaviour
     private float nextPathUpdate;
     private Vector3 lastTargetPosition;
 
+    [Header("Movimiento / Ataque")]
+    public float stopDistance = 1.4f;
+    //public float walkAnimationSpeed = 1.5f;
+
+    private Animator animator;
+
     public int GetCurrentLife()
     {
         return currentLife;

@@ -166,7 +166,7 @@ public class EnemySpawnManager : MonoBehaviour
         Scene currentScene = SceneManager.GetActiveScene();
         SceneManager.LoadScene(currentScene.name);
     }
-
+    //
     public void QuitGame()
     {
         Time.timeScale = 1f;

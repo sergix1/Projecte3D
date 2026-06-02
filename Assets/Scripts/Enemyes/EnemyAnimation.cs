@@ -1,12 +1,24 @@
 using UnityEngine;
-using UnityEngine.AI;
 
 public class EnemyAnimation : MonoBehaviour
 {
     public Animator animator;
+    public float animationSpeed = 1f;
 
-    void Update()
+    private float lastAnimationSpeed = -1f;
+
+    private void Awake()
     {
-        animator.speed = 2f;
+        if (animator == null)
+            animator = GetComponentInChildren<Animator>();
+    }
+
+    private void Update()
+    {
+        if (animator == null || Mathf.Approximately(lastAnimationSpeed, animationSpeed))
+            return;
+
+        animator.speed = animationSpeed;
+        lastAnimationSpeed = animationSpeed;
     }
 }

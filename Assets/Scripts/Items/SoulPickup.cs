@@ -20,7 +20,7 @@ public class SoulPickup : MonoBehaviour
             collected = true;
             if (GameManager.Instance == null)
             {
-                Debug.LogError("No GameManager found in the scene. Soul cannot be collected.");
+ 
                 return;
             }
             if (pickupEffect != null)

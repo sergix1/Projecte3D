@@ -12,7 +12,7 @@ public class GroundClickMarker : MonoBehaviour
 
     private float timer;
     private Renderer markerRenderer;
-    private Material markerMaterial;
+    private MaterialPropertyBlock propertyBlock;
     private int colorPropertyId;
     private bool hasColorProperty;
     private Color startColor;
@@ -30,15 +30,15 @@ public class GroundClickMarker : MonoBehaviour
         markerRenderer = GetComponent<Renderer>();
         if (markerRenderer != null)
         {
-            markerMaterial = markerRenderer.material;
-            colorPropertyId = GetColorPropertyId(markerMaterial);
+            propertyBlock = new MaterialPropertyBlock();
+            colorPropertyId = GetColorPropertyId(markerRenderer.sharedMaterial);
             hasColorProperty = colorPropertyId != 0;
 
-            startColor = hasColorProperty ? markerMaterial.GetColor(colorPropertyId) : Color.white;
+            startColor = hasColorProperty ? markerRenderer.sharedMaterial.GetColor(colorPropertyId) : Color.white;
             startColor.a = 0.9f;
 
             if (hasColorProperty)
-                markerMaterial.SetColor(colorPropertyId, startColor);
+                SetColor(startColor);
         }
     }
 
@@ -51,11 +51,11 @@ public class GroundClickMarker : MonoBehaviour
         float scale = Mathf.Lerp(startScale, 0f, Mathf.SmoothStep(0, 1, t));
         transform.localScale = new Vector3(scale, scale, scale);
 
-        if (hasColorProperty && markerMaterial != null)
+        if (hasColorProperty && markerRenderer != null)
         {
             Color color = startColor;
             color.a = Mathf.Lerp(startColor.a, 0f, t);
-            markerMaterial.SetColor(colorPropertyId, color);
+            SetColor(color);
         }
 
         if (t >= 1f)
@@ -74,5 +74,11 @@ public class GroundClickMarker : MonoBehaviour
             return BaseColorId;
 
         return 0;
+    }
+
+    private void SetColor(Color color)
+    {
+        propertyBlock.SetColor(colorPropertyId, color);
+        markerRenderer.SetPropertyBlock(propertyBlock);
     }
 }

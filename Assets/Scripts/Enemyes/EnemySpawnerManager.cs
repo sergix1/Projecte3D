@@ -1,73 +1,111 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.SceneManagement;
+
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public class EnemySpawnManager : MonoBehaviour
 {
-    [Header("Prefabs")]
+    [Header("Prefab")]
     [SerializeField] private GameObject zombiePrefab;
-    [SerializeField] private GameObject magePrefab;
 
     [Header("Spawn Points")]
     [SerializeField] private Transform[] zombieSpawnPoints;
-    [SerializeField] private Transform[] mageSpawnPoints;
 
     [Header("Player")]
     [SerializeField] private Transform player;
 
-    [Header("Limits")]
-    [SerializeField] private int maxZombies = 20    ;
-    [SerializeField] private int maxMages = 2;
-
-    [Header("Respawn")]
+    [Header("Normal")]
+    [SerializeField] private int maxZombies = 20;
     [SerializeField] private float spawnInterval = 5f;
+    [SerializeField] private int zombiesPerSpawn = 1;
+
+    [Header("Maldición+")]
+    public static bool gamePlusActive;
+
+    [SerializeField] private int gamePlusMaxZombies = 35;
+    [SerializeField] private float gamePlusSpawnInterval = 2f;
+    [SerializeField] private int gamePlusZombiesPerSpawn = 3;
+
+    [Header("Spawn Settings")]
     [SerializeField] private float minDistanceFromPlayer = 8f;
     [SerializeField] private float navMeshSearchRadius = 2f;
+    [SerializeField] private int spawnPointAttempts = 10;
+    [SerializeField] private float cleanListInterval = 1f;
 
-    private readonly List<GameObject> currentZombies = new List<GameObject>();
-    private readonly List<GameObject> currentMages = new List<GameObject>();
-
+    [Header("Organización")]
     public Transform instanceZombies;
 
+    private readonly List<GameObject> currentZombies = new List<GameObject>();
+
+    private int activeMaxZombies;
+    private float activeSpawnInterval;
+    private int activeZombiesPerSpawn;
+
     private float timer;
+    private float nextCleanTime;
 
     private void Start()
     {
+        Time.timeScale = 1f;
+
+        ApplyDifficulty();
         SpawnUntilLimit();
     }
 
     private void Update()
     {
-        CleanLists();
+        if (Time.time >= nextCleanTime)
+        {
+            nextCleanTime = Time.time + cleanListInterval;
+            CleanList();
+        }
 
         timer += Time.deltaTime;
 
-        if (timer >= spawnInterval)
+        if (timer >= activeSpawnInterval)
         {
             timer = 0f;
             SpawnUntilLimit();
         }
     }
 
-    private void SpawnUntilLimit()
+    private void ApplyDifficulty()
     {
-        if (currentZombies.Count < maxZombies)
+        if (gamePlusActive)
         {
-            TrySpawnEnemy(zombiePrefab, zombieSpawnPoints, currentZombies);
+            activeMaxZombies = gamePlusMaxZombies;
+            activeSpawnInterval = gamePlusSpawnInterval;
+            activeZombiesPerSpawn = gamePlusZombiesPerSpawn;
         }
-
-        if (currentMages.Count < maxMages)
+        else
         {
-            TrySpawnEnemy(magePrefab, mageSpawnPoints, currentMages);
+            activeMaxZombies = maxZombies;
+            activeSpawnInterval = spawnInterval;
+            activeZombiesPerSpawn = zombiesPerSpawn;
         }
     }
 
-    private void TrySpawnEnemy(GameObject prefab, Transform[] spawnPoints, List<GameObject> list)
+    private void SpawnUntilLimit()
     {
-        if (prefab == null || spawnPoints == null || spawnPoints.Length == 0)
+        for (int i = 0; i < activeZombiesPerSpawn; i++)
+        {
+            if (currentZombies.Count >= activeMaxZombies)
+                return;
+
+            TrySpawnZombie();
+        }
+    }
+
+    private void TrySpawnZombie()
+    {
+        if (zombiePrefab == null || zombieSpawnPoints == null || zombieSpawnPoints.Length == 0)
             return;
 
-        Transform spawnPoint = GetValidSpawnPoint(spawnPoints);
+        Transform spawnPoint = GetValidSpawnPoint();
 
         if (spawnPoint == null)
             return;
@@ -75,43 +113,63 @@ public class EnemySpawnManager : MonoBehaviour
         Vector3 spawnPosition = spawnPoint.position;
 
         if (NavMesh.SamplePosition(spawnPosition, out NavMeshHit hit, navMeshSearchRadius, NavMesh.AllAreas))
-        {
             spawnPosition = hit.position;
-        }
 
-        GameObject enemy = Instantiate(prefab, spawnPosition, spawnPoint.rotation,instanceZombies);
+        GameObject zombie = Instantiate(zombiePrefab, spawnPosition, spawnPoint.rotation, instanceZombies);
 
-        NavMeshAgent agent = enemy.GetComponent<NavMeshAgent>();
+        NavMeshAgent agent = zombie.GetComponent<NavMeshAgent>();
 
-        if (agent != null && agent.isOnNavMesh)
-        {
+        if (agent != null && agent.enabled && agent.isOnNavMesh)
             agent.Warp(spawnPosition);
-        }
 
-        list.Add(enemy);
+        currentZombies.Add(zombie);
     }
 
-    private Transform GetValidSpawnPoint(Transform[] spawnPoints)
+    private Transform GetValidSpawnPoint()
     {
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < spawnPointAttempts; i++)
         {
-            Transform randomPoint = spawnPoints[Random.Range(0, spawnPoints.Length)];
+            Transform randomPoint = zombieSpawnPoints[Random.Range(0, zombieSpawnPoints.Length)];
 
             if (player == null)
                 return randomPoint;
 
-            float distanceToPlayer = Vector3.Distance(randomPoint.position, player.position);
+            float distanceToPlayer = (randomPoint.position - player.position).sqrMagnitude;
+            float minDistance = minDistanceFromPlayer * minDistanceFromPlayer;
 
-            if (distanceToPlayer >= minDistanceFromPlayer)
+            if (distanceToPlayer >= minDistance)
                 return randomPoint;
         }
 
         return null;
     }
 
-    private void CleanLists()
+    private void CleanList()
     {
-        currentZombies.RemoveAll(enemy => enemy == null || !enemy.activeInHierarchy);
-        currentMages.RemoveAll(enemy => enemy == null || !enemy.activeInHierarchy);
+        currentZombies.RemoveAll(zombie => zombie == null || !zombie.activeInHierarchy);
+    }
+
+    public void StartGamePlus()
+    {
+        gamePlusActive = true;
+        Time.timeScale = 1f;
+
+        Scene currentScene = SceneManager.GetActiveScene();
+        SceneManager.LoadScene(currentScene.name);
+    }
+
+    public void RestartNormalGame()
+    {
+        gamePlusActive = false;
+        Time.timeScale = 1f;
+
+        Scene currentScene = SceneManager.GetActiveScene();
+        SceneManager.LoadScene(currentScene.name);
+    }
+
+    public void QuitGame()
+    {
+        Time.timeScale = 1f;
+
     }
 }

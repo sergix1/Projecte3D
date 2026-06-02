@@ -4,9 +4,12 @@ using UnityEngine.AI;
 
 public class PlayerRoll : MonoBehaviour
 {
+    private const string RollTrigger = "Roll";
+
     [SerializeField] private float rollDistance = 2.8f;
     [SerializeField] private float rollDuration = 0.2f;
     [SerializeField] private float rollCooldown = 3f;
+    [SerializeField] private KeyCode rollKey = KeyCode.Space;
 
     [SerializeField] private NavMeshAgent agent;
     [SerializeField] private Animator animator;
@@ -18,7 +21,7 @@ public class PlayerRoll : MonoBehaviour
     private Camera mainCamera;
     private bool canRoll = true;
 
-    void Start()
+    private void Start()
     {
         mainCamera = Camera.main;
 
@@ -32,9 +35,9 @@ public class PlayerRoll : MonoBehaviour
             clickToMove = GetComponent<ClickToMove>();
     }
 
-    void Update()
+    private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Space) && canRoll)
+        if (Input.GetKeyDown(rollKey) && canRoll)
         {
             if (rollCooldownUI != null && !rollCooldownUI.CanUse())
                 return;
@@ -74,29 +77,28 @@ public class PlayerRoll : MonoBehaviour
         transform.rotation = Quaternion.LookRotation(direction);
 
         if (animator != null)
-            animator.SetTrigger("Roll");
+            animator.SetTrigger(RollTrigger);
 
         float timer = 0f;
         float speed = rollDistance / rollDuration;
         bool useAgent = agent != null && agent.enabled && agent.isOnNavMesh;
+        Vector3 targetPosition = GetRollTarget(direction, useAgent);
 
         while (timer < rollDuration)
         {
-            Vector3 movement = direction * speed * Time.deltaTime;
+            Vector3 remainingMovement = targetPosition - transform.position;
+            remainingMovement.y = 0f;
+
+            if (remainingMovement.sqrMagnitude <= 0.0001f)
+                break;
+
+            float stepDistance = Mathf.Min(speed * Time.deltaTime, remainingMovement.magnitude);
+            Vector3 movement = remainingMovement.normalized * stepDistance;
 
             if (useAgent)
-            {
-                Vector3 nextPosition = transform.position + movement;
-
-                if (NavMesh.Raycast(transform.position, nextPosition, out _, agent.areaMask))
-                    break;
-
                 agent.Move(movement);
-            }
             else
-            {
                 transform.position += movement;
-            }
 
             timer += Time.deltaTime;
             yield return null;
@@ -104,5 +106,18 @@ public class PlayerRoll : MonoBehaviour
 
         yield return new WaitForSeconds(rollCooldown);
         canRoll = true;
+    }
+
+    private Vector3 GetRollTarget(Vector3 direction, bool useAgent)
+    {
+        Vector3 targetPosition = transform.position + direction * rollDistance;
+
+        if (!useAgent)
+            return targetPosition;
+
+        if (NavMesh.Raycast(transform.position, targetPosition, out NavMeshHit hit, agent.areaMask))
+            return hit.position;
+
+        return targetPosition;
     }
 }

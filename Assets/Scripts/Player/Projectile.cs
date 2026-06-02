@@ -2,22 +2,32 @@ using UnityEngine;
 
 public class Projectile : MonoBehaviour
 {
+    private const int RaycastBufferSize = 8;
+    private const string PlayerTag = "Player";
+    private const string ProjectileTag = "Projectile";
+
     public float speed = 20f;
     public float lifeTime = 20f;
     public GameObject impactEffectPrefab;
     public float impactEffectLifetime = 1f;
-    public Color enemyImpactColor = new Color(0.75f, 0.05f, 0.05f, 1f);
-    public Color surfaceImpactColor = new Color(0.55f, 0.55f, 0.55f, 1f);
+    public Color enemyImpactColor = Color.red;
+    public Color wallImpactColor = Color.gray;
+    public float fallbackImpactOffset = 0.2f;
 
     private Vector3 direction;
     private float damage = 30f;
-    private float currentTime;
     private bool hasImpacted;
     private Collider[] ownColliders;
+    private static readonly RaycastHit[] hits = new RaycastHit[RaycastBufferSize];
 
     private void Awake()
     {
         ownColliders = GetComponentsInChildren<Collider>();
+    }
+
+    private void Start()
+    {
+        Destroy(gameObject, lifeTime);
     }
 
     public void SetDamage(float damage)
@@ -37,35 +47,22 @@ public class Projectile : MonoBehaviour
         if (movement.sqrMagnitude <= 0f)
             return;
 
-        RaycastHit[] hits = Physics.RaycastAll(
+        int hitCount = Physics.RaycastNonAlloc(
             transform.position,
             direction,
+            hits,
             movement.magnitude,
             Physics.DefaultRaycastLayers,
             QueryTriggerInteraction.Collide
         );
 
-        System.Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
-
-        foreach (RaycastHit hit in hits)
+        if (TryGetFirstImpact(hitCount, out RaycastHit firstHit))
         {
-            if (!CanImpact(hit.collider))
-                continue;
-
-            HandleImpact(hit.collider, hit.point);
+            HandleImpact(firstHit.collider, firstHit.point);
             return;
         }
 
         transform.position += movement;
-    }
-
-    void Update()
-    {
-        currentTime += UnityEngine.Time.deltaTime;
-        if (currentTime > lifeTime)
-        {
-            Destroy(gameObject);
-        }
     }
 
     private void OnTriggerEnter(Collider other)
@@ -96,7 +93,7 @@ public class Projectile : MonoBehaviour
         if (IsOwnCollider(other))
             return false;
 
-        if (other.CompareTag("Player") || other.CompareTag("Projectile"))
+        if (other.CompareTag(PlayerTag) || other.CompareTag(ProjectileTag))
             return false;
 
         EnemyBase enemy = other.GetComponentInParent<EnemyBase>();
@@ -120,6 +117,30 @@ public class Projectile : MonoBehaviour
         return false;
     }
 
+    private bool TryGetFirstImpact(int hitCount, out RaycastHit firstHit)
+    {
+        firstHit = default;
+        float closestDistance = Mathf.Infinity;
+        bool foundHit = false;
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            RaycastHit hit = hits[i];
+
+            if (!CanImpact(hit.collider))
+                continue;
+
+            if (hit.distance >= closestDistance)
+                continue;
+
+            closestDistance = hit.distance;
+            firstHit = hit;
+            foundHit = true;
+        }
+
+        return foundHit;
+    }
+
     private void HandleImpact(Collider other, Vector3 impactPoint)
     {
         hasImpacted = true;
@@ -139,93 +160,22 @@ public class Projectile : MonoBehaviour
         Vector3 point = other.ClosestPoint(transform.position);
 
         if (point == transform.position)
-            point = transform.position - direction.normalized * 0.2f;
+            point = transform.position - direction.normalized * fallbackImpactOffset;
 
         return point;
     }
 
     private void SpawnImpactEffect(Vector3 position, bool hitEnemy)
     {
-        if (impactEffectPrefab != null)
-        {
-            GameObject effect = Instantiate(impactEffectPrefab, position, Quaternion.identity);
-            Destroy(effect, impactEffectLifetime);
+        if (impactEffectPrefab == null)
             return;
-        }
 
-        Color impactColor = hitEnemy ? enemyImpactColor : surfaceImpactColor;
-        Color glowColor = Color.Lerp(impactColor, Color.white, 0.3f);
+        GameObject effect = Instantiate(impactEffectPrefab, position, Quaternion.identity);
+        SimpleImpactEffect simpleImpactEffect = effect.GetComponent<SimpleImpactEffect>();
 
-        GameObject effectObject = new GameObject("Projectile Impact");
-        effectObject.transform.position = position;
+        if (simpleImpactEffect != null)
+            simpleImpactEffect.SetColor(hitEnemy ? enemyImpactColor : wallImpactColor);
 
-        ParticleSystem particles = effectObject.AddComponent<ParticleSystem>();
-        particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-
-        ParticleSystemRenderer particleRenderer = effectObject.GetComponent<ParticleSystemRenderer>();
-        ParticleSystem.MainModule main = particles.main;
-        main.duration = 0.12f;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(0.12f, 0.35f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(1.5f, 4.5f);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.04f, 0.12f);
-        main.startColor = new ParticleSystem.MinMaxGradient(
-            impactColor,
-            Color.Lerp(impactColor, Color.black, 0.35f)
-        );
-        main.loop = false;
-        main.simulationSpace = ParticleSystemSimulationSpace.World;
-
-        ParticleSystem.EmissionModule emission = particles.emission;
-        emission.rateOverTime = 0f;
-        emission.SetBursts(new[]
-        {
-            new ParticleSystem.Burst(0f, 18)
-        });
-
-        ParticleSystem.ShapeModule shape = particles.shape;
-        shape.shapeType = ParticleSystemShapeType.Cone;
-        shape.radius = 0.04f;
-        shape.angle = 25f;
-
-        Shader particleShader = Shader.Find("Legacy Shaders/Particles/Alpha Blended");
-        if (particleShader == null)
-            particleShader = Shader.Find("Particles/Standard Unlit");
-        if (particleShader == null)
-            particleShader = Shader.Find("Sprites/Default");
-
-        if (particleShader != null && particleRenderer != null)
-        {
-            Material particleMaterial = new Material(particleShader);
-            particleRenderer.material = particleMaterial;
-        }
-
-        ParticleSystem.ColorOverLifetimeModule colorOverLifetime = particles.colorOverLifetime;
-        colorOverLifetime.enabled = true;
-        Gradient gradient = new Gradient();
-        gradient.SetKeys(
-            new[]
-            {
-                new GradientColorKey(glowColor, 0f),
-                new GradientColorKey(impactColor, 0.45f),
-                new GradientColorKey(Color.black, 1f)
-            },
-            new[]
-            {
-                new GradientAlphaKey(1f, 0f),
-                new GradientAlphaKey(0.6f, 0.5f),
-                new GradientAlphaKey(0f, 1f)
-            }
-        );
-        colorOverLifetime.color = gradient;
-
-        Light flash = effectObject.AddComponent<Light>();
-        flash.type = LightType.Point;
-        flash.color = glowColor;
-        flash.intensity = hitEnemy ? 2.6f : 1.6f;
-        flash.range = 1.2f;
-        flash.shadows = LightShadows.None;
-
-        particles.Play();
-        Destroy(effectObject, impactEffectLifetime);
+        Destroy(effect, impactEffectLifetime);
     }
 }

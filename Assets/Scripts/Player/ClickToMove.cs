@@ -3,11 +3,17 @@ using UnityEngine.AI;
 
 public class ClickToMove : MonoBehaviour
 {
+    private const int ClickRaycastBufferSize = 16;
+    private const string GroundTag = "Ground";
+    private const string ShootTrigger = "shoot";
+    private const string SpeedParameter = "speed";
+    private const float MoveStopMargin = 0.05f;
+    private const float MinShootDirectionSqr = 0.001f;
+    private const float ClickPointRotationX = 90f;
+
     [Header("UI")]
     public AbilityCooldownUI tripleAttackCooldownUI;
-
     public float tripleAttackCooldown = 5f;
-
 
     public Transform SpawnBulletPos;
 
@@ -25,7 +31,15 @@ public class ClickToMove : MonoBehaviour
     public float shootCooldown = 0.5f;
     public float attackWindup = 0.2f;
     public float volleySpreadAngle = 12f;
+    public float navMeshSampleRadius = 2f;
+    public float repeatedClickDistance = 2f;
+    public float clickPointHeight = 0.03f;
+    public float rangeMarkerHeight = 0.04f;
+    public float fallbackAimHeight = 0.8f;
+    public KeyCode volleyKey = KeyCode.W;
+    public KeyCode rangeKey = KeyCode.C;
     public LayerMask groundLayer;
+    public LayerMask clickBlockLayer = ~0;
     public float manualAnimationSpeed = 1f;
     public float manualWalkPlaybackSpeed = 1.1f;
 
@@ -39,12 +53,13 @@ public class ClickToMove : MonoBehaviour
     private bool hasMoveDestination;
     private bool hasMoveClickPoint;
 
-    private float currentTimeToAA;
+    private float timeSinceLastShot;
     private Vector3 pendingProjectileDirection;
     private Vector3 lastMoveDestination;
     private Vector3 lastMoveClickPoint;
     private GameObject rangeMarker;
     private bool canTripleAttack = true;
+    private static readonly RaycastHit[] clickHits = new RaycastHit[ClickRaycastBufferSize];
 
     void Start()
     {
@@ -55,7 +70,7 @@ public class ClickToMove : MonoBehaviour
 
     void Update()
     {
-        currentTimeToAA += Time.deltaTime;
+        timeSinceLastShot += Time.deltaTime;
 
         if (Input.GetMouseButtonDown(1))
             MoveToMousePosition();
@@ -63,7 +78,7 @@ public class ClickToMove : MonoBehaviour
         if (Input.GetMouseButtonDown(0))
             TryAttackMousePosition();
 
-        if (Input.GetKeyDown(KeyCode.W))
+        if (Input.GetKeyDown(volleyKey))
             TryVolleyMousePosition();
 
         UpdateRangeMarker();
@@ -78,7 +93,6 @@ public class ClickToMove : MonoBehaviour
         if (!TryGetGroundHit(out RaycastHit hit))
             return;
 
-        // Esto se muestra SIEMPRE, aunque el click sea repetido
         SpawnClickPoint(clickPointPrefab, hit.point);
 
         if (IsRepeatedClick(hit.point))
@@ -86,7 +100,7 @@ public class ClickToMove : MonoBehaviour
 
         int areaMask = agent.areaMask;
 
-        if (!NavMesh.SamplePosition(hit.point, out NavMeshHit navHit, 2f, areaMask))
+        if (!NavMesh.SamplePosition(hit.point, out NavMeshHit navHit, navMeshSampleRadius, areaMask))
             return;
 
         NavMeshPath path = new NavMeshPath();
@@ -116,7 +130,7 @@ public class ClickToMove : MonoBehaviour
         previousPoint.y = 0f;
         point.y = 0f;
 
-        return (previousPoint - point).sqrMagnitude < 4f;
+        return (previousPoint - point).sqrMagnitude < repeatedClickDistance * repeatedClickDistance;
     }
 
     private bool IsSameDestination(Vector3 point)
@@ -136,7 +150,7 @@ public class ClickToMove : MonoBehaviour
         Vector3 currentDestination = lastMoveDestination;
         currentDestination.y = 0f;
         point.y = 0f;
-        return (currentDestination - point).sqrMagnitude < 4f;
+        return (currentDestination - point).sqrMagnitude < repeatedClickDistance * repeatedClickDistance;
     }
 
 
@@ -146,8 +160,9 @@ public class ClickToMove : MonoBehaviour
             && agent.enabled
             && agent.isOnNavMesh
             && !agent.isStopped
-            && (agent.pathPending || (agent.hasPath && agent.remainingDistance > agent.stoppingDistance + 0.05f));
+            && (agent.pathPending || (agent.hasPath && agent.remainingDistance > agent.stoppingDistance + MoveStopMargin));
     }
+
     private void TryAttackMousePosition()
     {
         if (cam == null)
@@ -157,11 +172,11 @@ public class ClickToMove : MonoBehaviour
         if (!Physics.Raycast(ray, out RaycastHit hit))
             return;
 
-        if (currentTimeToAA > 0.5f)
+        if (timeSinceLastShot >= shootCooldown)
         {
             Transform closestEnemy = GetClosestEnemyInRange(hit.point);
-            if (closestEnemy != null && TryShoot(closestEnemy, closestEnemy.position))
-                currentTimeToAA = 0;
+            if (closestEnemy != null && TryShoot(closestEnemy, GetEnemyAimPoint(closestEnemy)))
+                timeSinceLastShot = 0f;
         }
 
         SpawnClickPoint(clickPoint2Prefab, hit.point);
@@ -174,8 +189,33 @@ public class ClickToMove : MonoBehaviour
             return false;
 
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
-        int mask = groundLayer.value != 0 ? groundLayer.value : Physics.DefaultRaycastLayers;
-        return Physics.Raycast(ray, out hit, Mathf.Infinity, mask, QueryTriggerInteraction.Ignore);
+        int groundMask = groundLayer.value != 0 ? groundLayer.value : Physics.DefaultRaycastLayers;
+        int blockMask = clickBlockLayer.value != 0 ? clickBlockLayer.value : Physics.DefaultRaycastLayers;
+
+        int hitCount = Physics.RaycastNonAlloc(ray, clickHits, Mathf.Infinity, blockMask, QueryTriggerInteraction.Ignore);
+        float closestDistance = Mathf.Infinity;
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            RaycastHit currentHit = clickHits[i];
+
+            if (currentHit.collider == null || currentHit.collider.transform.IsChildOf(transform))
+                continue;
+
+            if (!IsGroundHit(currentHit, groundMask) || currentHit.distance >= closestDistance)
+                continue;
+
+            closestDistance = currentHit.distance;
+            hit = currentHit;
+        }
+
+        return hit.collider != null;
+    }
+
+    private bool IsGroundHit(RaycastHit hit, int groundMask)
+    {
+        int hitLayerMask = 1 << hit.collider.gameObject.layer;
+        return (groundMask & hitLayerMask) != 0 || hit.collider.CompareTag(GroundTag);
     }
 
     private void SpawnClickPoint(GameObject prefab, Vector3 point)
@@ -183,7 +223,7 @@ public class ClickToMove : MonoBehaviour
         if (prefab == null)
             return;
 
-        Instantiate(prefab, point + Vector3.up * 0.03f, Quaternion.Euler(90f, 0f, 0f));
+        Instantiate(prefab, point + Vector3.up * clickPointHeight, Quaternion.Euler(ClickPointRotationX, 0f, 0f));
     }
 
     private Transform GetClosestEnemyInRange(Vector3 hitPoint)
@@ -196,16 +236,17 @@ public class ClickToMove : MonoBehaviour
 
         foreach (Transform enemy in enemyes)
         {
-            if (!enemy.TryGetComponent(out EnemyBase enemyBase))
+            if (!enemy.TryGetComponent<EnemyBase>(out _))
                 continue;
 
-            Vector3 flatToPlayer = enemy.position - transform.position;
+            Vector3 enemyAimPoint = GetEnemyAimPoint(enemy);
+            Vector3 flatToPlayer = enemyAimPoint - transform.position;
             flatToPlayer.y = 0;
 
             if (flatToPlayer.sqrMagnitude > range * range)
                 continue;
 
-            float distanceToClick = Vector3.Distance(enemy.position, hitPoint);
+            float distanceToClick = Vector3.Distance(enemyAimPoint, hitPoint);
             if (distanceToClick < closestDistanceToClick)
             {
                 closestEnemy = enemy;
@@ -221,10 +262,10 @@ public class ClickToMove : MonoBehaviour
         if (!canShoot || isShootingAnimation || SpawnBulletPos == null)
             return false;
 
-        Vector3 flatToEnemy = enemy.position - transform.position;
+        Vector3 flatToEnemy = targetPoint - transform.position;
         flatToEnemy.y = 0;
 
-        if (flatToEnemy.sqrMagnitude > range * range || flatToEnemy.sqrMagnitude <= 0.001f)
+        if (flatToEnemy.sqrMagnitude > range * range || flatToEnemy.sqrMagnitude <= MinShootDirectionSqr)
             return false;
 
         StopMovement();
@@ -237,13 +278,29 @@ public class ClickToMove : MonoBehaviour
         pendingProjectileDirection = (targetPoint - SpawnBulletPos.position).normalized;
 
         if (animator != null)
-            animator.SetTrigger("shoot");
+            animator.SetTrigger(ShootTrigger);
 
         Invoke(nameof(FirePendingAttack), attackWindup);
         Invoke(nameof(ResetShootAnimation), shootCooldown);
         Invoke(nameof(ResetShoot), shootCooldown);
 
         return true;
+    }
+
+    private Vector3 GetEnemyAimPoint(Transform enemy)
+    {
+        if (enemy == null)
+            return Vector3.zero;
+
+        Collider enemyCollider = enemy.GetComponentInChildren<Collider>();
+        if (enemyCollider != null)
+            return enemyCollider.bounds.center;
+
+        Renderer enemyRenderer = enemy.GetComponentInChildren<Renderer>();
+        if (enemyRenderer != null)
+            return enemyRenderer.bounds.center;
+
+        return enemy.position + Vector3.up * fallbackAimHeight;
     }
 
     private void TryVolleyMousePosition()
@@ -258,7 +315,7 @@ public class ClickToMove : MonoBehaviour
         Vector3 direction = hit.point - SpawnBulletPos.position;
         direction.y = 0f;
 
-        if (direction.sqrMagnitude <= 0.001f)
+        if (direction.sqrMagnitude <= MinShootDirectionSqr)
             return;
 
         direction.Normalize();
@@ -275,7 +332,7 @@ public class ClickToMove : MonoBehaviour
             tripleAttackCooldownUI.StartCooldown(tripleAttackCooldown);
 
         if (animator != null)
-            animator.SetTrigger("shoot");
+            animator.SetTrigger(ShootTrigger);
 
         InstantiateProjectile(Quaternion.Euler(0f, -volleySpreadAngle, 0f) * direction);
         InstantiateProjectile(direction);
@@ -329,7 +386,7 @@ public class ClickToMove : MonoBehaviour
 
         if (animator != null)
         {
-            animator.ResetTrigger("shoot");
+            animator.ResetTrigger(ShootTrigger);
             animator.speed = 1f;
         }
     }
@@ -338,7 +395,7 @@ public class ClickToMove : MonoBehaviour
     {
         StopMovement();
         if (animator != null)
-            animator.SetFloat("speed", 0f);
+            animator.SetFloat(SpeedParameter, 0f);
     }
 
     private void StopMovement()
@@ -376,7 +433,7 @@ public class ClickToMove : MonoBehaviour
 
     private void UpdateRangeMarker()
     {
-        if (Input.GetKey(KeyCode.C))
+        if (Input.GetKey(rangeKey))
             ShowRangeMarker();
         else
             HideRangeMarker();
@@ -390,14 +447,14 @@ public class ClickToMove : MonoBehaviour
         if (isShootingAnimation)
         {
             animator.speed = 1f;
-            animator.SetFloat("speed", 0f);
+            animator.SetFloat(SpeedParameter, 0f);
             return;
         }
 
         bool moving = IsMovingToDestination();
 
         animator.speed = moving ? manualWalkPlaybackSpeed : 1f;
-        animator.SetFloat("speed", moving ? manualAnimationSpeed : 0f);
+        animator.SetFloat(SpeedParameter, moving ? manualAnimationSpeed : 0f);
     }
 
     private void ShowRangeMarker()
@@ -410,7 +467,7 @@ public class ClickToMove : MonoBehaviour
 
         float diameter = range * 2f;
         rangeMarker.transform.localScale = new Vector3(diameter, diameter, rangeMarkerThickness);
-        rangeMarker.transform.position = transform.position + Vector3.up * 0.04f;
+        rangeMarker.transform.position = transform.position + Vector3.up * rangeMarkerHeight;
         rangeMarker.SetActive(true);
     }
 

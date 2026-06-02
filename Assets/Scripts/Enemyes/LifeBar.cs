@@ -3,30 +3,58 @@ using UnityEngine;
 
 public class LifeBar : MonoBehaviour
 {
-    public Transform head;   
+    public Transform head;
     public TextMeshProUGUI text;
 
-    Transform cam;
+    private Transform cam;
+    private EnemyBase enemy;
+    private int lastLife = -1;
+    private int lastMaxLife = -1;
 
-    void Awake()
+    private void Awake()
     {
-        cam = Camera.main.transform;
-    }
+        Camera mainCamera = Camera.main;
 
-    void Update()
-    {
-        if (!head) return;
-        var head1 = new Vector3(head.position.x + 1.5f, head.position.y , head.position.z);
+        if (mainCamera != null)
+            cam = mainCamera.transform;
 
-  
-        transform.position = head1 + Vector3.up * 0.25f;       
-        transform.rotation = Quaternion.LookRotation(cam.forward);
+        enemy = GetComponentInParent<EnemyBase>();
         transform.localScale = Vector3.one * 0.02f;
-        SetLife();
+        UpdateLifeText();
     }
+
+    private void Update()
+    {
+        if (head == null)
+            return;
+
+        Vector3 headPosition = new Vector3(head.position.x + 1.5f, head.position.y, head.position.z);
+        transform.position = headPosition + Vector3.up * 0.25f;
+
+        if (cam != null)
+            transform.rotation = Quaternion.LookRotation(cam.forward);
+
+        UpdateLifeText();
+    }
+
     public void SetLife()
     {
-        var enemyscr = this.gameObject.GetComponentInParent<EnemyBase>();
-        text.text = enemyscr.GetCurrentLife() +  " / " + enemyscr.MaxLife() + "";
+        UpdateLifeText();
+    }
+
+    private void UpdateLifeText()
+    {
+        if (enemy == null || text == null)
+            return;
+
+        int currentLife = enemy.GetCurrentLife();
+        int maxLife = enemy.MaxLife();
+
+        if (currentLife == lastLife && maxLife == lastMaxLife)
+            return;
+
+        lastLife = currentLife;
+        lastMaxLife = maxLife;
+        text.text = currentLife + " / " + maxLife;
     }
 }

@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 using UnityEditor;
 #endif
 
-public class EnemySpawnManager : MonoBehaviour
+public class EnemySpawnerManager : MonoBehaviour
 {
     [Header("Prefab")]
     [SerializeField] private GameObject zombiePrefab;

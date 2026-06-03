@@ -10,8 +10,6 @@ public class Projectile : MonoBehaviour
     public float lifeTime = 20f;
     public GameObject impactEffectPrefab;
     public float impactEffectLifetime = 1f;
-    public Color enemyImpactColor = Color.red;
-    public Color wallImpactColor = Color.gray;
     public float fallbackImpactOffset = 0.2f;
 
     private Vector3 direction;
@@ -151,7 +149,7 @@ public class Projectile : MonoBehaviour
         if (hitEnemy)
             enemy.RestLife((int)damage);
 
-        SpawnImpactEffect(impactPoint, hitEnemy);
+        SpawnImpactEffect(impactPoint);
         Destroy(gameObject);
     }
 
@@ -165,17 +163,12 @@ public class Projectile : MonoBehaviour
         return point;
     }
 
-    private void SpawnImpactEffect(Vector3 position, bool hitEnemy)
+    private void SpawnImpactEffect(Vector3 position)
     {
         if (impactEffectPrefab == null)
             return;
 
         GameObject effect = Instantiate(impactEffectPrefab, position, Quaternion.identity);
-        SimpleImpactEffect simpleImpactEffect = effect.GetComponent<SimpleImpactEffect>();
-
-        if (simpleImpactEffect != null)
-            simpleImpactEffect.SetColor(hitEnemy ? enemyImpactColor : wallImpactColor);
-
         Destroy(effect, impactEffectLifetime);
     }
 }

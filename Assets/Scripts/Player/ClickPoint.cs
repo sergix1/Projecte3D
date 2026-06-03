@@ -1,8 +1,5 @@
 using UnityEngine;
-
-
-
-public class GroundClickMarker : MonoBehaviour
+public class ClickPoint : MonoBehaviour
 {
     private static readonly int ColorId = Shader.PropertyToID("_Color");
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");

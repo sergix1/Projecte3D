@@ -143,7 +143,7 @@ public class MageLevitation : MonoBehaviour
             visualRoot.SetParent(visualPivot, true);
         }
 
-        MageAI mageAI = GetComponent<MageAI>();
+        MageIA mageAI = GetComponent<MageIA>();
 
         if (mageAI != null && mageAI.firePoint != null && mageAI.firePoint.parent != visualPivot)
             mageAI.firePoint.SetParent(visualPivot, true);

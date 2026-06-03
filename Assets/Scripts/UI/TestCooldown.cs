@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class TestCooldownUI : MonoBehaviour
+public class TestCooldown : MonoBehaviour
 {
     [SerializeField] private AbilityCooldownUI rollCooldown;
     [SerializeField] private AbilityCooldownUI tripleCooldown;

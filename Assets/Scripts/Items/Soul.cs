@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class SoulFloat : MonoBehaviour
+public class Soul : MonoBehaviour
 {
     public float altura = 0.2f;
     public float velocidadFlotar = 2f;

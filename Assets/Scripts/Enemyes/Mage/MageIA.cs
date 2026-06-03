@@ -2,7 +2,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.AI;
 
-public class MageAI : MonoBehaviour
+public class MageIA : MonoBehaviour
 {
     private const string PlayerTag = "Player";
     private const string ShootTrigger = "shoot";
